@@ -40,26 +40,6 @@ const DEFAULT_CONFIG: ApiConfig = {
   model: 'gpt-4',
 };
 
-// Load config from localStorage
-function loadConfig(): ApiConfig {
-  if (typeof window === 'undefined') return DEFAULT_CONFIG;
-  const saved = localStorage.getItem('atoms-config');
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return DEFAULT_CONFIG;
-    }
-  }
-  return DEFAULT_CONFIG;
-}
-
-// Save config to localStorage
-function saveConfig(config: ApiConfig) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem('atoms-config', JSON.stringify(config));
-}
-
 export function useStore() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
@@ -70,17 +50,22 @@ export function useStore() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Load config on mount
+  // Load config from DB on mount
   useEffect(() => {
-    setConfig(loadConfig());
+    fetch('/api/user-config')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.apiKey) {
+          setConfig({
+            apiFormat: data.apiFormat || 'openai',
+            baseUrl: data.baseUrl || DEFAULT_CONFIG.baseUrl,
+            apiKey: data.apiKey,
+            model: data.model || DEFAULT_CONFIG.model,
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
-
-  // Save config when it changes
-  useEffect(() => {
-    if (config !== DEFAULT_CONFIG) {
-      saveConfig(config);
-    }
-  }, [config]);
 
   // Fetch projects
   const fetchProjects = useCallback(async () => {
@@ -163,9 +148,29 @@ export function useStore() {
     await fetchVersions(project.id);
   }, [fetchMessages, fetchVersions]);
 
-  // Send message and generate code
+  // Send message and generate code (with streaming)
   const sendMessage = useCallback(async (content: string) => {
     if (!currentProject || isGenerating) return;
+
+    // Check if API is configured
+    if (!config.apiKey) {
+      const errorMsg: Message = {
+        id: 'error-' + Date.now(),
+        projectId: currentProject.id,
+        role: 'assistant',
+        content: '请先在右上角设置中配置 API Key 和模型信息，然后再开始对话。',
+        createdAt: new Date().toISOString(),
+      };
+      // Save user message first
+      const userRes = await fetch(`/api/projects/${currentProject.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'user', content }),
+      });
+      const userMessage = await userRes.json();
+      setMessages(prev => [...prev, userMessage, errorMsg]);
+      return;
+    }
 
     setIsGenerating(true);
 
@@ -184,6 +189,17 @@ export function useStore() {
       { role: 'user' as const, content },
     ];
 
+    // Create a temporary assistant message for streaming
+    const tempId = 'streaming-' + Date.now();
+    const tempMessage: Message = {
+      id: tempId,
+      projectId: currentProject.id,
+      role: 'assistant',
+      content: '',
+      createdAt: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, tempMessage]);
+
     try {
       // Call generate API
       const res = await fetch('/api/generate', {
@@ -197,7 +213,7 @@ export function useStore() {
         throw new Error(error.error || 'Failed to generate');
       }
 
-      // Read stream
+      // Read stream and update message in real-time
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
@@ -206,18 +222,28 @@ export function useStore() {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          fullContent += decoder.decode(value, { stream: true });
+          const chunk = decoder.decode(value, { stream: true });
+          fullContent += chunk;
+
+          // Update the streaming message in real-time
+          setMessages(prev => prev.map(m =>
+            m.id === tempId ? { ...m, content: fullContent } : m
+          ));
         }
       }
 
-      // Save assistant message
+      // Save the final assistant message to database
       const assistantRes = await fetch(`/api/projects/${currentProject.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: 'assistant', content: fullContent }),
       });
       const assistantMessage = await assistantRes.json();
-      setMessages(prev => [...prev, assistantMessage]);
+
+      // Replace temp message with the saved one
+      setMessages(prev => prev.map(m =>
+        m.id === tempId ? assistantMessage : m
+      ));
 
       // Extract HTML code and save as version
       const htmlMatch = fullContent.match(/```html\n([\s\S]*?)```/);
@@ -237,19 +263,45 @@ export function useStore() {
       }
     } catch (error) {
       console.error('Failed to generate:', error);
-      // Save error message
-      const errorMessage = {
-        id: Date.now().toString(),
-        projectId: currentProject.id,
-        role: 'assistant' as const,
-        content: `Error: ${error instanceof Error ? error.message : 'Failed to generate code'}`,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      // Update temp message with error
+      setMessages(prev => prev.map(m =>
+        m.id === tempId ? {
+          ...m,
+          id: 'error-' + Date.now(),
+          content: `Error: ${error instanceof Error ? error.message : 'Failed to generate code'}`,
+        } : m
+      ));
     } finally {
       setIsGenerating(false);
     }
   }, [currentProject, messages, config, isGenerating]);
+
+  // Regenerate last response
+  const regenerate = useCallback(async () => {
+    if (!currentProject || isGenerating) return;
+    const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUserMessage) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg?.role === 'assistant') {
+        setMessages(prev => prev.slice(0, -1));
+      }
+      await sendMessage(lastUserMessage.content);
+    }
+  }, [currentProject, messages, isGenerating, sendMessage]);
+
+  // Save config to DB
+  const saveConfigToDb = useCallback(async (newConfig: ApiConfig) => {
+    setConfig(newConfig);
+    try {
+      await fetch('/api/user-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConfig),
+      });
+    } catch (e) {
+      console.error('Failed to save config:', e);
+    }
+  }, []);
 
   // Load projects on mount
   useEffect(() => {
@@ -265,11 +317,12 @@ export function useStore() {
     config,
     isLoading,
     isGenerating,
-    setConfig,
+    setConfig: saveConfigToDb,
     createProject,
     deleteProject,
     selectProject,
     sendMessage,
+    regenerate,
     setCurrentVersion,
     fetchProjects,
   };

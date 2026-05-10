@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
     "@base-ui/react": "^1.4.1",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
@@ -17,6 +18,8 @@
     "lucide-react": "^1.14.0",
     "next": "16.2.6",
     "openai": "^6.37.0",
+    "pg": "^8.20.0",
+    "prism-react-renderer": "^2.4.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "shadcn": "^4.7.0",
@@ -28,6 +31,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

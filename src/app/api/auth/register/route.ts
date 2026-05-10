@@ -4,7 +4,15 @@ import { setSession } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, email, password } = await request.json();
+    const { username, email, password, inviteCode } = await request.json();
+
+    const validCode = process.env.INVITE_CODE || 'atoms2026';
+    if (inviteCode !== validCode) {
+      return NextResponse.json(
+        { error: '邀请码不正确' },
+        { status: 400 }
+      );
+    }
 
     if (!username || !email || !password) {
       return NextResponse.json(

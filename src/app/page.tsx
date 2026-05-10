@@ -29,6 +29,7 @@ export default function Home() {
     deleteProject,
     selectProject,
     sendMessage,
+    regenerate,
     setCurrentVersion,
   } = useStore();
 
@@ -48,7 +49,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen overflow-hidden">
       <Header
         projects={projects}
         currentProject={currentProject}
@@ -59,17 +60,21 @@ export default function Home() {
         onDeleteProject={deleteProject}
         onSaveConfig={setConfig}
       />
-      <main className="flex-1 flex">
+      <main className="flex-1 flex overflow-hidden">
         {currentProject ? (
           <>
-            <div className="w-1/2 border-r">
+            {/* Chat Panel - Left side */}
+            <div className="w-1/2 border-r flex flex-col overflow-hidden">
               <ChatPanel
                 messages={messages}
                 isGenerating={isGenerating}
+                hasApiKey={!!config.apiKey}
                 onSend={sendMessage}
+                onRegenerate={regenerate}
               />
             </div>
-            <div className="w-1/2">
+            {/* Preview Panel - Right side */}
+            <div className="w-1/2 flex flex-col overflow-hidden">
               <PreviewPanel
                 versions={versions}
                 currentVersion={currentVersion}

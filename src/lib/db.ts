@@ -1,14 +1,9 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-
-// Ensure data directory exists
-async function ensureDataDir() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-}
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://atoms:atoms2026@localhost:5432/atoms_demo',
+});
 
 // Types
 export interface User {
@@ -45,179 +40,191 @@ export interface Version {
   createdAt: string;
 }
 
-// Helper to read JSON file
-async function readJsonFile<T>(filename: string): Promise<T[]> {
-  await ensureDataDir();
-  const filepath = path.join(DATA_DIR, filename);
-  try {
-    const data = await fs.readFile(filepath, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
+// Helper to map DB row to camelCase
+function mapUser(row: any): User {
+  return {
+    id: row.id,
+    username: row.username,
+    email: row.email,
+    password: row.password,
+    createdAt: row.created_at,
+  };
 }
 
-// Helper to write JSON file
-async function writeJsonFile<T>(filename: string, data: T[]): Promise<void> {
-  await ensureDataDir();
-  const filepath = path.join(DATA_DIR, filename);
-  await fs.writeFile(filepath, JSON.stringify(data, null, 2));
+function mapProject(row: any): Project {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapMessage(row: any): Message {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    userId: row.user_id,
+    role: row.role,
+    content: row.content,
+    createdAt: row.created_at,
+  };
+}
+
+function mapVersion(row: any): Version {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    userId: row.user_id,
+    code: row.code,
+    description: row.description,
+    createdAt: row.created_at,
+  };
 }
 
 // User operations
 export async function getUsers(): Promise<User[]> {
-  return readJsonFile<User>('users.json');
+  const result = await pool.query('SELECT * FROM users');
+  return result.rows.map(mapUser);
 }
 
 export async function getUserById(id: string): Promise<User | null> {
-  const users = await getUsers();
-  return users.find(u => u.id === id) || null;
+  const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+  return result.rows[0] ? mapUser(result.rows[0]) : null;
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
-  const users = await getUsers();
-  return users.find(u => u.email === email) || null;
+  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+  return result.rows[0] ? mapUser(result.rows[0]) : null;
 }
 
 export async function getUserByUsername(username: string): Promise<User | null> {
-  const users = await getUsers();
-  return users.find(u => u.username === username) || null;
+  const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+  return result.rows[0] ? mapUser(result.rows[0]) : null;
 }
 
 export async function createUser(username: string, email: string, password: string): Promise<User> {
-  const users = await getUsers();
-
-  // Check if user already exists
-  if (users.find(u => u.email === email)) {
-    throw new Error('Email already exists');
-  }
-  if (users.find(u => u.username === username)) {
-    throw new Error('Username already exists');
-  }
-
-  // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
-
-  const user: User = {
-    id: uuidv4(),
-    username,
-    email,
-    password: hashedPassword,
-    createdAt: new Date().toISOString(),
-  };
-
-  users.push(user);
-  await writeJsonFile('users.json', users);
-  return user;
+  const id = crypto.randomUUID();
+  const result = await pool.query(
+    'INSERT INTO users (id, username, email, password) VALUES ($1, $2, $3, $4) RETURNING *',
+    [id, username, email, hashedPassword]
+  );
+  return mapUser(result.rows[0]);
 }
 
 export async function verifyUser(email: string, password: string): Promise<User | null> {
-  const users = await getUsers();
-  const user = users.find(u => u.email === email);
-  if (!user) return null;
+  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+  const row = result.rows[0];
+  if (!row) return null;
 
-  const isValid = await bcrypt.compare(password, user.password);
+  const isValid = await bcrypt.compare(password, row.password);
   if (!isValid) return null;
 
-  return user;
+  return mapUser(row);
 }
 
 // Project operations
 export async function getUserProjects(userId: string): Promise<Project[]> {
-  const projects = await readJsonFile<Project>('projects.json');
-  return projects.filter(p => p.userId === userId);
+  const result = await pool.query('SELECT * FROM projects WHERE user_id = $1 AND deleted_at IS NULL ORDER BY updated_at DESC', [userId]);
+  return result.rows.map(mapProject);
 }
 
 export async function getProject(id: string, userId: string): Promise<Project | null> {
-  const projects = await readJsonFile<Project>('projects.json');
-  return projects.find(p => p.id === id && p.userId === userId) || null;
+  const result = await pool.query('SELECT * FROM projects WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, userId]);
+  return result.rows[0] ? mapProject(result.rows[0]) : null;
 }
 
 export async function createProject(userId: string, name: string): Promise<Project> {
-  const projects = await readJsonFile<Project>('projects.json');
-  const project: Project = {
-    id: uuidv4(),
-    userId,
-    name,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  projects.push(project);
-  await writeJsonFile('projects.json', projects);
-  return project;
+  const id = crypto.randomUUID();
+  const result = await pool.query(
+    'INSERT INTO projects (id, user_id, name) VALUES ($1, $2, $3) RETURNING *',
+    [id, userId, name]
+  );
+  return mapProject(result.rows[0]);
 }
 
 export async function updateProject(id: string, userId: string, name: string): Promise<Project | null> {
-  const projects = await readJsonFile<Project>('projects.json');
-  const index = projects.findIndex(p => p.id === id && p.userId === userId);
-  if (index === -1) return null;
-  projects[index].name = name;
-  projects[index].updatedAt = new Date().toISOString();
-  await writeJsonFile('projects.json', projects);
-  return projects[index];
+  const result = await pool.query(
+    'UPDATE projects SET name = $3, updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING *',
+    [id, userId, name]
+  );
+  return result.rows[0] ? mapProject(result.rows[0]) : null;
 }
 
 export async function deleteProject(id: string, userId: string): Promise<boolean> {
-  const projects = await readJsonFile<Project>('projects.json');
-  const project = projects.find(p => p.id === id && p.userId === userId);
-  if (!project) return false;
-
-  const filtered = projects.filter(p => p.id !== id);
-  await writeJsonFile('projects.json', filtered);
-
-  // Also delete related messages and versions
-  const messages = await readJsonFile<Message>('messages.json');
-  await writeJsonFile('messages.json', messages.filter(m => m.projectId !== id));
-
-  const versions = await readJsonFile<Version>('versions.json');
-  await writeJsonFile('versions.json', versions.filter(v => v.projectId !== id));
-
-  return true;
+  const result = await pool.query('UPDATE projects SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, userId]);
+  return (result.rowCount ?? 0) > 0;
 }
 
 // Message operations
 export async function getProjectMessages(projectId: string, userId: string): Promise<Message[]> {
-  const messages = await readJsonFile<Message>('messages.json');
-  return messages.filter(m => m.projectId === projectId && m.userId === userId);
+  const result = await pool.query(
+    'SELECT * FROM messages WHERE project_id = $1 AND user_id = $2 ORDER BY created_at',
+    [projectId, userId]
+  );
+  return result.rows.map(mapMessage);
 }
 
 export async function createMessage(projectId: string, userId: string, role: 'user' | 'assistant', content: string): Promise<Message> {
-  const messages = await readJsonFile<Message>('messages.json');
-  const message: Message = {
-    id: uuidv4(),
-    projectId,
-    userId,
-    role,
-    content,
-    createdAt: new Date().toISOString(),
-  };
-  messages.push(message);
-  await writeJsonFile('messages.json', messages);
-  return message;
+  const id = crypto.randomUUID();
+  const result = await pool.query(
+    'INSERT INTO messages (id, project_id, user_id, role, content) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+    [id, projectId, userId, role, content]
+  );
+  return mapMessage(result.rows[0]);
 }
 
 // Version operations
 export async function getProjectVersions(projectId: string, userId: string): Promise<Version[]> {
-  const versions = await readJsonFile<Version>('versions.json');
-  return versions.filter(v => v.projectId === projectId && v.userId === userId);
+  const result = await pool.query(
+    'SELECT * FROM versions WHERE project_id = $1 AND user_id = $2 ORDER BY created_at',
+    [projectId, userId]
+  );
+  return result.rows.map(mapVersion);
 }
 
 export async function createVersion(projectId: string, userId: string, code: string, description: string): Promise<Version> {
-  const versions = await readJsonFile<Version>('versions.json');
-  const version: Version = {
-    id: uuidv4(),
-    projectId,
-    userId,
-    code,
-    description,
-    createdAt: new Date().toISOString(),
-  };
-  versions.push(version);
-  await writeJsonFile('versions.json', versions);
-  return version;
+  const id = crypto.randomUUID();
+  const result = await pool.query(
+    'INSERT INTO versions (id, project_id, user_id, code, description) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+    [id, projectId, userId, code, description]
+  );
+  return mapVersion(result.rows[0]);
 }
 
 export async function getVersion(id: string, userId: string): Promise<Version | null> {
-  const versions = await readJsonFile<Version>('versions.json');
-  return versions.find(v => v.id === id && v.userId === userId) || null;
+  const result = await pool.query('SELECT * FROM versions WHERE id = $1 AND user_id = $2', [id, userId]);
+  return result.rows[0] ? mapVersion(result.rows[0]) : null;
+}
+
+// User config operations
+export interface UserConfig {
+  apiFormat: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export async function getUserConfig(userId: string): Promise<UserConfig> {
+  const result = await pool.query('SELECT * FROM user_configs WHERE user_id = $1', [userId]);
+  if (result.rows[0]) {
+    return {
+      apiFormat: result.rows[0].api_format || 'openai',
+      baseUrl: result.rows[0].base_url || '',
+      apiKey: result.rows[0].api_key || '',
+      model: result.rows[0].model || '',
+    };
+  }
+  return { apiFormat: 'openai', baseUrl: '', apiKey: '', model: '' };
+}
+
+export async function saveUserConfig(userId: string, config: UserConfig): Promise<void> {
+  await pool.query(
+    `INSERT INTO user_configs (user_id, api_format, base_url, api_key, model, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET api_format = $2, base_url = $3, api_key = $4, model = $5, updated_at = NOW()`,
+    [userId, config.apiFormat, config.baseUrl, config.apiKey, config.model]
+  );
 }

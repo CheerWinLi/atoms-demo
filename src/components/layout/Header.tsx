@@ -54,7 +54,7 @@ export function Header({
               <DropdownMenuItem
                 key={project.id}
                 className="flex justify-between"
-                onSelect={() => onSelectProject(project)}
+                onClick={() => onSelectProject(project)}
               >
                 <span>{project.name}</span>
                 <Button
@@ -63,7 +63,9 @@ export function Header({
                   className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteProject(project.id);
+                    if (window.confirm(`确定要删除项目「${project.name}」吗？`)) {
+                      onDeleteProject(project.id);
+                    }
                   }}
                 >
                   ×
@@ -108,7 +110,7 @@ export function Header({
                 <DropdownMenuSeparator />
               </>
             )}
-            <DropdownMenuItem onSelect={handleLogout}>
+            <DropdownMenuItem onClick={handleLogout}>
               退出登录
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -36,7 +37,7 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password }),
+        body: JSON.stringify({ username, email, password, inviteCode }),
       });
 
       const data = await res.json();
@@ -120,6 +121,19 @@ export default function RegisterPage() {
                 placeholder="再次输入密码"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="inviteCode" className="text-sm font-medium">
+                邀请码
+              </label>
+              <Input
+                id="inviteCode"
+                type="text"
+                placeholder="请输入邀请码"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
                 required
               />
             </div>
