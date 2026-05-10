@@ -276,7 +276,10 @@ export function useStore() {
       ));
 
       // Extract HTML and create version (only in generate stage)
-      const htmlMatch = fullContent.match(/```html\n([\s\S]*?)```/);
+      // Flexible regex: matches ```html, ```html\n, or just ``` with HTML content
+      const htmlMatch = fullContent.match(/```html\s*\n?([\s\S]*?)```/) ||
+                        fullContent.match(/```\s*\n?(<!DOCTYPE[\s\S]*?)```/i) ||
+                        fullContent.match(/```\s*\n?(<html[\s\S]*?)```/i);
       if (htmlMatch) {
         const code = htmlMatch[1].trim();
         const versionRes = await fetch(`/api/projects/${currentProject.id}/versions`, {
