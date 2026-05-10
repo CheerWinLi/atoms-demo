@@ -198,8 +198,24 @@ function MessageContent({ content, isStreaming }: { content: string; isStreaming
           return <WritingFile key={i} fileName={segment.content} done />;
         }
         return (
-          <div key={i} className="text-sm break-words [&_strong]:font-bold [&_em]:italic [&_code]:bg-gray-200 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mb-0.5 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-1 [&_h2]:text-base [&_h2]:font-bold [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mb-1 [&_table]:w-full [&_table]:border-collapse [&_table]:my-2 [&_th]:border [&_th]:border-gray-300 [&_th]:px-3 [&_th]:py-1.5 [&_th]:bg-gray-100 [&_th]:text-left [&_th]:font-medium [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-1.5 [&_details]:my-2 [&_details]:rounded [&_details]:border [&_details]:border-gray-200 [&_details]:p-2 [&_summary]:cursor-pointer [&_summary]:font-medium [&_summary]:text-gray-700">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{segment.content}</ReactMarkdown>
+          <div key={i} className="text-sm break-words [&_strong]:font-bold [&_em]:italic [&_code]:bg-gray-200 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mb-0.5 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-1 [&_h2]:text-base [&_h2]:font-bold [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mb-1 [&_table]:w-full [&_table]:border-collapse [&_table]:my-2 [&_th]:border [&_th]:border-gray-300 [&_th]:px-3 [&_th]:py-1.5 [&_th]:bg-gray-100 [&_th]:text-left [&_th]:font-medium [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-1.5">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                // Suppress code blocks - they're handled by the parser
+                code: ({ children, ...props }) => {
+                  // Inline code (no language = inline)
+                  if (!props.className?.includes('language-')) {
+                    return <code {...props}>{children}</code>;
+                  }
+                  // Block code - suppress entirely
+                  return null;
+                },
+                pre: () => null,
+              }}
+            >
+              {segment.content}
+            </ReactMarkdown>
           </div>
         );
       })}
