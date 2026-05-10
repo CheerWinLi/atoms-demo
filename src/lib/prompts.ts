@@ -16,6 +16,8 @@ const COMMON_RULES = `
 2. 用 <think> 标签输出思考过程（会被折叠显示）
 3. 用 Markdown 格式输出文字（**粗体**、列表、标题等）
 4. 回复简洁有条理，不要啰嗦
+5. 表格必须用标准 Markdown 表格语法（| 列1 | 列2 |），不要用 HTML 标签
+6. 绝对不要使用 HTML 标签（如 <details>、<summary>、<table> 等），只用 Markdown 语法
 `;
 
 // Stage 1: 需求分析
