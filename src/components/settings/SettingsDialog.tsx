@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -22,6 +22,11 @@ interface SettingsDialogProps {
 export function SettingsDialog({ config, onSave }: SettingsDialogProps) {
   const [open, setOpen] = useState(false);
   const [localConfig, setLocalConfig] = useState<ApiConfig>(config);
+
+  // Sync when config prop changes (e.g. loaded from DB)
+  useEffect(() => {
+    setLocalConfig(config);
+  }, [config]);
 
   const handleSave = () => {
     onSave(localConfig);
