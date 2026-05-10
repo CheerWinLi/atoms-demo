@@ -2,7 +2,16 @@
 
 import { useState, useMemo } from 'react';
 import { Version } from '@/lib/store';
-import { Highlight } from 'prism-react-renderer';
+import { Highlight, themes } from 'prism-react-renderer';
+
+// Custom light theme with dark, visible colors
+const lightTheme = {
+  ...themes.github,
+  plain: {
+    color: '#1f2937',
+    backgroundColor: '#ffffff',
+  },
+};
 import { FileTree } from './FileTree';
 
 interface PreviewPanelProps {
@@ -211,12 +220,12 @@ export function PreviewPanel({
             ) : (
               <div className="h-full overflow-auto bg-white">
                 <Highlight
-                  theme={undefined}
+                  theme={lightTheme}
                   code={getCode(activeTab)}
                   language={(LANGUAGE_MAP[activeTab] || 'html') as any}
                 >
                   {({ className, style, tokens, getLineProps, getTokenProps }) => (
-                    <pre className={`${className} p-4 text-sm`} style={{ ...style, margin: 0, background: '#ffffff', minHeight: '100%', color: '#1f2937' }}>
+                    <pre className={`${className} p-4 text-sm`} style={{ ...style, margin: 0, background: '#ffffff', minHeight: '100%' }}>
                       {tokens.map((line, i) => (
                         <div key={i} {...getLineProps({ line })} className="table-row">
                           <span className="table-cell pr-4 text-right select-none text-xs w-10 border-r border-gray-200" style={{ color: '#9ca3af' }}>
