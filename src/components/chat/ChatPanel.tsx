@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Message } from '@/lib/store';
+import ReactMarkdown from 'react-markdown';
 
 interface ChatPanelProps {
   messages: Message[];
@@ -164,7 +165,9 @@ function MessageContent({ content, isStreaming }: { content: string; isStreaming
           return <WritingFile key={i} fileName={segment.content} done />;
         }
         return (
-          <p key={i} className="text-sm whitespace-pre-wrap break-words">{segment.content}</p>
+          <div key={i} className="text-sm break-words [&_strong]:font-bold [&_em]:italic [&_code]:bg-gray-200 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mb-0.5 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-1 [&_h2]:text-base [&_h2]:font-bold [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mb-1">
+            <ReactMarkdown>{segment.content}</ReactMarkdown>
+          </div>
         );
       })}
     </div>
