@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
+import { DeleteProjectDialog } from '@/components/projects/DeleteProjectDialog';
 import { Project, ApiConfig } from '@/lib/store';
 
 interface HeaderProps {
@@ -34,6 +36,7 @@ export function Header({
   onSaveConfig,
 }: HeaderProps) {
   const router = useRouter();
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -53,17 +56,17 @@ export function Header({
             {projects.map((project) => (
               <DropdownMenuItem
                 key={project.id}
-                className="flex justify-between"
-                onSelect={() => onSelectProject(project)}
+                className="flex justify-between group"
+                onClick={() => onSelectProject(project)}
               >
                 <span>{project.name}</span>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteProject(project.id);
+                    setDeleteTarget(project);
                   }}
                 >
                   ×
@@ -108,12 +111,24 @@ export function Header({
                 <DropdownMenuSeparator />
               </>
             )}
-            <DropdownMenuItem onSelect={handleLogout}>
+            <DropdownMenuItem onClick={handleLogout}>
               退出登录
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <DeleteProjectDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        projectName={deleteTarget?.name || ''}
+        onConfirm={() => {
+          if (deleteTarget) {
+            onDeleteProject(deleteTarget.id);
+            setDeleteTarget(null);
+          }
+        }}
+      />
     </header>
   );
 }

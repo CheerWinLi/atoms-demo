@@ -1,0 +1,110 @@
+/* One Light 主题 - 类似 IDEA 风格 */
+
+.hljs {
+  background: transparent !important;
+  color: #383a42;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #a0a1a7;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-type {
+  color: #a626a4;
+}
+
+.hljs-literal,
+.hljs-number,
+.hljs-tag .hljs-attr,
+.hljs-template-variable,
+.hljs-variable {
+  color: #986801;
+}
+
+.hljs-string,
+.hljs-doctag,
+.hljs-regexp {
+  color: #50a14f;
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-section,
+.hljs-selector-id {
+  color: #4078f2;
+}
+
+.hljs-subst {
+  font-weight: normal;
+}
+
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta,
+.hljs-selector-class {
+  color: #986801;
+}
+
+.hljs-built_in,
+.hljs-name {
+  color: #e45649;
+}
+
+.hljs-attr {
+  color: #986801;
+}
+
+.hljs-params {
+  color: #383a42;
+}
+
+.hljs-addition {
+  color: #50a14f;
+  background-color: #e6ffec;
+}
+
+.hljs-deletion {
+  color: #e45649;
+  background-color: #ffecec;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+.hljs-tag {
+  color: #383a42;
+}
+
+.hljs-tag .hljs-name {
+  color: #e45649;
+}
+
+.hljs-tag .hljs-string {
+  color: #50a14f;
+}
+
+.hljs-attribute {
+  color: #986801;
+}
+
+.hljs-selector-pseudo {
+  color: #986801;
+}
+
+.hljs-selector-attr {
+  color: #986801;
+}
+
+.hljs-property {
+  color: #4078f2;
+}

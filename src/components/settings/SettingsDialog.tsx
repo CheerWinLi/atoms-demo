@@ -84,7 +84,7 @@ export function SettingsDialog({ config, onSave }: SettingsDialogProps) {
               onChange={(e) =>
                 setLocalConfig({ ...localConfig, baseUrl: e.target.value })
               }
-              placeholder="https://api.openai.com/v1"
+              placeholder="例如：https://api.openai.com/v1"
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -113,7 +113,7 @@ export function SettingsDialog({ config, onSave }: SettingsDialogProps) {
               onChange={(e) =>
                 setLocalConfig({ ...localConfig, model: e.target.value })
               }
-              placeholder="gpt-4"
+              placeholder="例如：gpt-4、claude-3-sonnet"
             />
           </div>
         </div>

@@ -35,9 +35,9 @@ export interface ApiConfig {
 
 const DEFAULT_CONFIG: ApiConfig = {
   apiFormat: 'openai',
-  baseUrl: 'https://api.openai.com/v1',
+  baseUrl: '',
   apiKey: '',
-  model: 'gpt-4',
+  model: '',
 };
 
 // Load config from localStorage
@@ -46,7 +46,12 @@ function loadConfig(): ApiConfig {
   const saved = localStorage.getItem('atoms-config');
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const config = JSON.parse(saved);
+      // 验证配置完整性，如果缺少字段则返回默认值
+      if (!config.baseUrl || !config.apiKey || !config.model) {
+        return DEFAULT_CONFIG;
+      }
+      return config;
     } catch {
       return DEFAULT_CONFIG;
     }
@@ -69,6 +74,7 @@ export function useStore() {
   const [config, setConfig] = useState<ApiConfig>(DEFAULT_CONFIG);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [currentThinking, setCurrentThinking] = useState('');
 
   // Load config on mount
   useEffect(() => {
@@ -157,8 +163,12 @@ export function useStore() {
 
   // Select project
   const selectProject = useCallback(async (project: Project) => {
+    // 先清空旧数据
     setCurrentProject(project);
+    setMessages([]);
+    setVersions([]);
     setCurrentVersion(null);
+    // 再加载新数据
     await fetchMessages(project.id);
     await fetchVersions(project.id);
   }, [fetchMessages, fetchVersions]);
@@ -167,7 +177,25 @@ export function useStore() {
   const sendMessage = useCallback(async (content: string) => {
     if (!currentProject || isGenerating) return;
 
+    // 前端检查 API 配置
+    const missing = [];
+    if (!config.baseUrl) missing.push('API 地址');
+    if (!config.apiKey) missing.push('API Key');
+    if (!config.model) missing.push('模型名称');
+    if (missing.length > 0) {
+      const errorMsg = {
+        id: Date.now().toString(),
+        projectId: currentProject.id,
+        role: 'assistant' as const,
+        content: `⚠️ 请先完成 API 配置，缺少：${missing.join('、')}\n\n请点击右上角齿轮图标打开设置`,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, errorMsg]);
+      return;
+    }
+
     setIsGenerating(true);
+    setCurrentThinking('');
 
     // Save user message
     const userRes = await fetch(`/api/projects/${currentProject.id}/messages`, {
@@ -193,20 +221,49 @@ export function useStore() {
       });
 
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to generate');
+        let errorMsg = '生成失败';
+        try {
+          const errorData = await res.json();
+          errorMsg = errorData.error || errorData.message || errorMsg;
+        } catch {
+          errorMsg = `请求失败 (${res.status})`;
+        }
+        throw new Error(errorMsg);
       }
 
-      // Read stream
+      // Read stream with thinking extraction
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
+      let thinkingBuffer = '';
+      let isInThinking = false;
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          fullContent += decoder.decode(value, { stream: true });
+
+          const chunk = decoder.decode(value, { stream: true });
+          fullContent += chunk;
+
+          // Extract thinking process in real-time
+          for (let i = 0; i < chunk.length; i++) {
+            if (chunk[i] === '<' && chunk.substring(i, i + 9) === '<thinking') {
+              isInThinking = true;
+              thinkingBuffer = '';
+              i += 8; // Skip '<thinking'
+              continue;
+            }
+            if (chunk[i] === '<' && chunk.substring(i, i + 10) === '</thinking') {
+              isInThinking = false;
+              i += 9; // Skip '</thinking'
+              continue;
+            }
+            if (isInThinking) {
+              thinkingBuffer += chunk[i];
+              setCurrentThinking(thinkingBuffer);
+            }
+          }
         }
       }
 
@@ -237,17 +294,35 @@ export function useStore() {
       }
     } catch (error) {
       console.error('Failed to generate:', error);
-      // Save error message
+      // Save error message with user-friendly description
+      let errorContent = '生成失败，请重试';
+      if (error instanceof Error) {
+        const msg = error.message;
+        if (msg.includes('API 配置') || msg.includes('API configuration')) {
+          errorContent = `⚠️ ${msg}\n\n请点击右上角齿轮图标，在设置中配置 API 信息`;
+        } else if (msg.includes('401') || msg.includes('Unauthorized')) {
+          errorContent = '⚠️ API Key 无效，请检查设置中的 API Key 是否正确';
+        } else if (msg.includes('404') || msg.includes('Not Found')) {
+          errorContent = '⚠️ 模型不存在，请检查设置中的模型名称是否正确';
+        } else if (msg.includes('429') || msg.includes('Rate limit')) {
+          errorContent = '⚠️ 请求过于频繁，请稍后再试';
+        } else if (msg.includes('500') || msg.includes('Internal')) {
+          errorContent = '⚠️ API 服务异常，请稍后再试';
+        } else {
+          errorContent = `⚠️ ${msg}`;
+        }
+      }
       const errorMessage = {
         id: Date.now().toString(),
         projectId: currentProject.id,
         role: 'assistant' as const,
-        content: `Error: ${error instanceof Error ? error.message : 'Failed to generate code'}`,
+        content: errorContent,
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsGenerating(false);
+      setCurrentThinking('');
     }
   }, [currentProject, messages, config, isGenerating]);
 
@@ -265,6 +340,7 @@ export function useStore() {
     config,
     isLoading,
     isGenerating,
+    currentThinking,
     setConfig,
     createProject,
     deleteProject,
