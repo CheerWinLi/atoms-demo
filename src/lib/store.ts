@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { WorkflowStage, STAGE_ORDER, ADVANCE_KEYWORDS } from './prompts';
 
 // Types
 export interface Project {
@@ -49,6 +50,7 @@ export function useStore() {
   const [config, setConfig] = useState<ApiConfig>(DEFAULT_CONFIG);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [currentStage, setCurrentStage] = useState<WorkflowStage>('analysis');
 
   // Load config from DB on mount
   useEffect(() => {
@@ -117,6 +119,7 @@ export function useStore() {
       setMessages([]);
       setVersions([]);
       setCurrentVersion(null);
+      setCurrentStage('analysis');
       return project;
     } catch (error) {
       console.error('Failed to create project:', error);
@@ -134,6 +137,7 @@ export function useStore() {
         setMessages([]);
         setVersions([]);
         setCurrentVersion(null);
+        setCurrentStage('analysis');
       }
     } catch (error) {
       console.error('Failed to delete project:', error);
@@ -144,11 +148,29 @@ export function useStore() {
   const selectProject = useCallback(async (project: Project) => {
     setCurrentProject(project);
     setCurrentVersion(null);
+    setCurrentStage('analysis');
     await fetchMessages(project.id);
     await fetchVersions(project.id);
   }, [fetchMessages, fetchVersions]);
 
-  // Send message and generate code (with streaming)
+  // Advance to next stage
+  const advanceStage = useCallback(() => {
+    setCurrentStage(prev => {
+      const idx = STAGE_ORDER.indexOf(prev);
+      if (idx < STAGE_ORDER.length - 1) {
+        return STAGE_ORDER[idx + 1];
+      }
+      return prev;
+    });
+  }, []);
+
+  // Check if message is a confirmation keyword
+  const isAdvanceKeyword = useCallback((text: string): boolean => {
+    const trimmed = text.trim().toLowerCase();
+    return ADVANCE_KEYWORDS.some(kw => trimmed === kw.toLowerCase());
+  }, []);
+
+  // Send message and generate (with streaming)
   const sendMessage = useCallback(async (content: string) => {
     if (!currentProject || isGenerating) return;
 
@@ -161,7 +183,6 @@ export function useStore() {
         content: '请先在右上角设置中配置 API Key 和模型信息，然后再开始对话。',
         createdAt: new Date().toISOString(),
       };
-      // Save user message first
       const userRes = await fetch(`/api/projects/${currentProject.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -172,7 +193,18 @@ export function useStore() {
       return;
     }
 
+    // Check if user is confirming to advance to next stage
+    const shouldAdvance = isAdvanceKeyword(content) && currentStage !== 'generate';
+    if (shouldAdvance) {
+      advanceStage();
+    }
+
     setIsGenerating(true);
+
+    // Determine which stage to use for this request
+    const stageForRequest = shouldAdvance
+      ? STAGE_ORDER[Math.min(STAGE_ORDER.indexOf(currentStage) + 1, STAGE_ORDER.length - 1)]
+      : currentStage;
 
     // Save user message
     const userRes = await fetch(`/api/projects/${currentProject.id}/messages`, {
@@ -189,7 +221,7 @@ export function useStore() {
       { role: 'user' as const, content },
     ];
 
-    // Create a temporary assistant message for streaming
+    // Create streaming temp message
     const tempId = 'streaming-' + Date.now();
     const tempMessage: Message = {
       id: tempId,
@@ -201,11 +233,11 @@ export function useStore() {
     setMessages(prev => [...prev, tempMessage]);
 
     try {
-      // Call generate API
+      // Call generate API with stage
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: aiMessages, config }),
+        body: JSON.stringify({ messages: aiMessages, config, stage: stageForRequest }),
       });
 
       if (!res.ok) {
@@ -213,7 +245,7 @@ export function useStore() {
         throw new Error(error.error || 'Failed to generate');
       }
 
-      // Read stream and update message in real-time
+      // Read stream
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
@@ -225,14 +257,13 @@ export function useStore() {
           const chunk = decoder.decode(value, { stream: true });
           fullContent += chunk;
 
-          // Update the streaming message in real-time
           setMessages(prev => prev.map(m =>
             m.id === tempId ? { ...m, content: fullContent } : m
           ));
         }
       }
 
-      // Save the final assistant message to database
+      // Save final assistant message
       const assistantRes = await fetch(`/api/projects/${currentProject.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -240,12 +271,11 @@ export function useStore() {
       });
       const assistantMessage = await assistantRes.json();
 
-      // Replace temp message with the saved one
       setMessages(prev => prev.map(m =>
         m.id === tempId ? assistantMessage : m
       ));
 
-      // Extract HTML code and save as version
+      // Extract HTML and create version (only in generate stage)
       const htmlMatch = fullContent.match(/```html\n([\s\S]*?)```/);
       if (htmlMatch) {
         const code = htmlMatch[1].trim();
@@ -263,7 +293,6 @@ export function useStore() {
       }
     } catch (error) {
       console.error('Failed to generate:', error);
-      // Update temp message with error
       setMessages(prev => prev.map(m =>
         m.id === tempId ? {
           ...m,
@@ -274,7 +303,7 @@ export function useStore() {
     } finally {
       setIsGenerating(false);
     }
-  }, [currentProject, messages, config, isGenerating]);
+  }, [currentProject, messages, config, isGenerating, currentStage, advanceStage, isAdvanceKeyword]);
 
   // Regenerate last response
   const regenerate = useCallback(async () => {
@@ -317,6 +346,7 @@ export function useStore() {
     config,
     isLoading,
     isGenerating,
+    currentStage,
     setConfig: saveConfigToDb,
     createProject,
     deleteProject,
