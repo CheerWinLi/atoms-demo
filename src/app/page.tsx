@@ -70,7 +70,6 @@ export default function Home() {
                 messages={messages}
                 isGenerating={isGenerating}
                 hasApiKey={!!config.apiKey}
-                currentStage={currentStage}
                 onSend={sendMessage}
                 onRegenerate={regenerate}
               />

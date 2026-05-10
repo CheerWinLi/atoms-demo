@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Message } from '@/lib/store';
-import { WorkflowStage, STAGE_ORDER, STAGE_LABELS } from '@/lib/prompts';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -12,39 +11,8 @@ interface ChatPanelProps {
   messages: Message[];
   isGenerating: boolean;
   hasApiKey: boolean;
-  currentStage: WorkflowStage;
   onSend: (content: string) => void;
   onRegenerate?: () => void;
-}
-
-function StageProgress({ currentStage }: { currentStage: WorkflowStage }) {
-  const currentIdx = STAGE_ORDER.indexOf(currentStage);
-
-  return (
-    <div className="flex items-center gap-1 px-4 py-2 border-b bg-gray-50 shrink-0">
-      {STAGE_ORDER.map((stage, i) => {
-        const isActive = i === currentIdx;
-        const isDone = i < currentIdx;
-        return (
-          <div key={stage} className="flex items-center">
-            {i > 0 && <div className={`w-6 h-px mx-1 ${isDone ? 'bg-blue-400' : 'bg-gray-300'}`} />}
-            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
-              isActive ? 'bg-blue-100 text-blue-700' : isDone ? 'text-green-600' : 'text-gray-400'
-            }`}>
-              {isDone ? (
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <span className={`h-2 w-2 rounded-full ${isActive ? 'bg-blue-500' : 'bg-gray-300'}`} />
-              )}
-              <span>{STAGE_LABELS[stage]}</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 type Segment = { type: 'thinking' | 'writing' | 'done' | 'text'; content: string; language?: string };
@@ -223,7 +191,7 @@ function MessageContent({ content, isStreaming }: { content: string; isStreaming
   );
 }
 
-export function ChatPanel({ messages, isGenerating, hasApiKey, currentStage, onSend, onRegenerate }: ChatPanelProps) {
+export function ChatPanel({ messages, isGenerating, hasApiKey, onSend, onRegenerate }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -250,7 +218,6 @@ export function ChatPanel({ messages, isGenerating, hasApiKey, currentStage, onS
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <StageProgress currentStage={currentStage} />
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
           {messages.length === 0 && (
