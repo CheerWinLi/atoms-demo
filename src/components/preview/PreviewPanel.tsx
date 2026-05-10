@@ -225,7 +225,7 @@ export function PreviewPanel({
                   language={(LANGUAGE_MAP[activeTab] || 'html') as any}
                 >
                   {({ className, style, tokens, getLineProps, getTokenProps }) => (
-                    <pre className={`${className} p-4 text-sm`} style={{ ...style, margin: 0, background: '#ffffff', minHeight: '100%' }}>
+                    <pre className={`${className} p-4 text-sm`} style={{ ...style, margin: 0, minHeight: '100%' }}>
                       {tokens.map((line, i) => (
                         <div key={i} {...getLineProps({ line })} className="table-row">
                           <span className="table-cell pr-4 text-right select-none text-xs w-10 border-r border-gray-200" style={{ color: '#9ca3af' }}>
